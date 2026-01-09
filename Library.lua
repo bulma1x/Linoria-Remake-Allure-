@@ -57,7 +57,7 @@ local Library = {
 
 -- Утилиты для работы с цветом
 function Library:GetDarkerColor(color)
-    local h, s, v = Color3.toHSV(color)
+    local h, s, v = color:ToHSV()
     return Color3.fromHSV(h, s, v / 1.5)
 end
 
@@ -86,7 +86,11 @@ function Library:Create(className, properties)
     local instance = Instance.new(className)
     
     for property, value in pairs(properties) do
-        instance[property] = value
+        if instance[property] ~= nil then
+            instance[property] = value
+        else
+            warn("Свойство " .. property .. " не существует для " .. className)
+        end
     end
     
     return instance
@@ -115,11 +119,19 @@ function Library:CreateLabel(properties, isHud)
     }, isHud)
     
     -- Применяем дополнительные свойства
-    return self:Create(label, properties)
+    for property, value in pairs(properties) do
+        if label[property] ~= nil then
+            label[property] = value
+        end
+    end
+    
+    return label
 end
 
 -- Создание перетаскиваемого окна
 function Library:MakeDraggable(frame, cutoff)
+    if not frame then return end
+    
     frame.Active = true
     
     frame.InputBegan:Connect(function(input)
@@ -130,17 +142,20 @@ function Library:MakeDraggable(frame, cutoff)
             )
             
             -- Проверяем, находится ли клик в верхней части
-            if offset.Y > (cutoff or 40) then
+            if cutoff and offset.Y > cutoff then
                 return
             end
             
             -- Перетаскивание
             while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                local newX = Mouse.X - offset.X + (frame.Size.X.Offset * (frame.AnchorPoint.X or 0))
+                local newY = Mouse.Y - offset.Y + (frame.Size.Y.Offset * (frame.AnchorPoint.Y or 0))
+                
                 frame.Position = UDim2.new(
                     0,
-                    Mouse.X - offset.X + (frame.Size.X.Offset * frame.AnchorPoint.X),
+                    math.clamp(newX, 0, ScreenGui.AbsoluteSize.X - frame.AbsoluteSize.X),
                     0,
-                    Mouse.Y - offset.Y + (frame.Size.Y.Offset * frame.AnchorPoint.Y)
+                    math.clamp(newY, 0, ScreenGui.AbsoluteSize.Y - frame.AbsoluteSize.Y)
                 )
                 
                 RenderStepped:Wait()
@@ -151,8 +166,13 @@ end
 
 -- Создание тултипа
 function Library:AddToolTip(text, hoverInstance)
+    if not text or not hoverInstance then return end
+    
     local textWidth, textHeight = self:GetTextBounds(text, self.Font, 14)
+    if not textWidth or not textHeight then return end
+    
     local tooltip = self:Create("Frame", {
+        Name = "Tooltip",
         BackgroundColor3 = self.Colors.Main,
         BorderColor3 = self.Colors.Outline,
         Size = UDim2.fromOffset(textWidth + 5, textHeight + 4),
@@ -208,10 +228,12 @@ end
 
 -- Регистрация элементов для динамического обновления цвета
 function Library:AddToRegistry(instance, properties, isHud)
+    if not instance then return end
+    
     local index = #self.Registry + 1
     local data = {
         Instance = instance,
-        Properties = properties,
+        Properties = properties or {},
         Index = index
     }
     
@@ -221,9 +243,13 @@ function Library:AddToRegistry(instance, properties, isHud)
     if isHud then
         table.insert(self.HudRegistry, data)
     end
+    
+    return data
 end
 
 function Library:RemoveFromRegistry(instance)
+    if not instance then return end
+    
     local data = self.RegistryMap[instance]
     
     if data then
@@ -339,19 +365,18 @@ function Library:CreateWindow(config)
     
     -- Функции окна
     function window:SetTitle(title)
-        titleLabel.Text = title
+        if titleLabel then
+            titleLabel.Text = title
+        end
     end
     
     function window:AddTab(name)
-        -- Здесь будет реализация добавления вкладки
-        -- Возвращаем объект вкладки с методами для добавления элементов
         local tab = {
             Name = name,
             Groupboxes = {},
             Content = {}
         }
         
-        -- Добавляем вкладку в окно
         table.insert(window.Tabs, tab)
         return tab
     end
@@ -382,9 +407,13 @@ end
 
 -- Нотификации
 function Library:Notify(message, duration)
+    if not message then return end
+    
     duration = duration or 5
     
     local textWidth, textHeight = self:GetTextBounds(message, self.Font, 14)
+    if not textWidth or not textHeight then return end
+    
     local padding = 10
     local notificationHeight = textHeight + padding
     
@@ -392,22 +421,15 @@ function Library:Notify(message, duration)
     local notification = self:Create("Frame", {
         BackgroundColor3 = self.Colors.Main,
         BorderColor3 = self.Colors.Outline,
-        Position = UDim2.new(1, -textWidth - 20, 0, 10),
+        Position = UDim2.new(1, -10, 0, 10),
         Size = UDim2.new(0, 0, 0, notificationHeight),
         ClipsDescendants = true,
         ZIndex = 100,
         Parent = self.ScreenGui
     })
     
-    -- Анимация появления
-    self:Create("Tween", {
-        Instance = notification,
-        Properties = { Size = UDim2.new(0, textWidth + 20, 0, notificationHeight) },
-        Duration = 0.3
-    })
-    
     -- Текст уведомления
-    self:CreateLabel({
+    local label = self:CreateLabel({
         Position = UDim2.new(0, 10, 0, 5),
         Size = UDim2.new(1, -20, 1, -10),
         Text = message,
@@ -416,17 +438,29 @@ function Library:Notify(message, duration)
         Parent = notification
     })
     
+    -- Анимация появления
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local showTween = TweenService:Create(notification, tweenInfo, {
+        Size = UDim2.new(0, textWidth + 20, 0, notificationHeight),
+        Position = UDim2.new(1, -textWidth - 30, 0, 10)
+    })
+    
+    showTween:Play()
+    
     -- Автоматическое скрытие
     task.delay(duration, function()
-        if notification then
-            self:Create("Tween", {
-                Instance = notification,
-                Properties = { Size = UDim2.new(0, 0, 0, notificationHeight) },
-                Duration = 0.3
+        if notification and notification.Parent then
+            local hideTween = TweenService:Create(notification, tweenInfo, {
+                Size = UDim2.new(0, 0, 0, notificationHeight),
+                Position = UDim2.new(1, -10, 0, 10)
             })
             
-            task.wait(0.3)
-            notification:Destroy()
+            hideTween:Play()
+            
+            hideTween.Completed:Wait()
+            if notification and notification.Parent then
+                notification:Destroy()
+            end
         end
     end)
 end
@@ -434,34 +468,58 @@ end
 -- Безопасный вызов функций
 function Library:SafeCallback(func, ...)
     if type(func) ~= "function" then
-        return
+        return nil
     end
     
     local success, result = pcall(func, ...)
     
-    if not success and self.NotifyOnError then
-        self:Notify(result, 3)
+    if not success then
+        if self.NotifyOnError then
+            self:Notify("Ошибка: " .. tostring(result), 3)
+        else
+            warn("Callback ошибка:", result)
+        end
+        return nil
     end
     
     return result
 end
 
--- Получение размеров текста
+-- Получение размеров текста (исправленная)
 function Library:GetTextBounds(text, font, size, resolution)
-    resolution = resolution or Vector2.new(1920, 1080)
-    local bounds = TextService:GetTextSize(text, size, font, resolution)
-    return bounds.X, bounds.Y
+    if not text or not font or not size then
+        return 0, 0
+    end
+    
+    -- Безопасный вызов GetTextSize
+    local success, bounds = pcall(function()
+        return TextService:GetTextSize(
+            tostring(text), 
+            tonumber(size) or 14, 
+            font, 
+            resolution or Vector2.new(1920, 1080)
+        )
+    end)
+    
+    if success and bounds then
+        return math.max(10, bounds.X), math.max(10, bounds.Y)
+    else
+        -- Fallback значения
+        return #text * (size / 2), size
+    end
 end
 
 -- Проверка, находится ли мышь над открытым окном
 function Library:MouseIsOverOpenedFrame()
     for frame in pairs(self.OpenedFrames) do
-        local pos = frame.AbsolutePosition
-        local size = frame.AbsoluteSize
-        
-        if Mouse.X >= pos.X and Mouse.X <= pos.X + size.X and
-           Mouse.Y >= pos.Y and Mouse.Y <= pos.Y + size.Y then
-            return true
+        if frame and frame:IsA("GuiObject") then
+            local pos = frame.AbsolutePosition
+            local size = frame.AbsoluteSize
+            
+            if Mouse.X >= pos.X and Mouse.X <= pos.X + size.X and
+               Mouse.Y >= pos.Y and Mouse.Y <= pos.Y + size.Y then
+                return true
+            end
         end
     end
     
@@ -473,8 +531,8 @@ function Library:Unload()
     -- Отключаем все сигналы
     for i = #self.Signals, 1, -1 do
         local connection = table.remove(self.Signals, i)
-        if connection then
-            connection:Disconnect()
+        if connection and type(connection.Disconnect) == "function" then
+            pcall(function() connection:Disconnect() end)
         end
     end
     
@@ -483,19 +541,31 @@ function Library:Unload()
         self:SafeCallback(self.OnUnload)
     end
     
+    -- Очищаем реестры
+    self.Registry = {}
+    self.RegistryMap = {}
+    self.HudRegistry = {}
+    self.OpenedFrames = {}
+    
     -- Удаляем GUI
-    if self.ScreenGui then
+    if self.ScreenGui and self.ScreenGui.Parent then
         self.ScreenGui:Destroy()
     end
 end
 
 -- Коллбек при выгрузке
 function Library:OnUnload(callback)
-    self.OnUnload = callback
+    if type(callback) == "function" then
+        self.OnUnload = callback
+    end
 end
 
--- Автоматическая очистка реестра при удалении элементов
-self:AddToRegistry(ScreenGui, {})
+-- Вспомогательная функция для подключения сигналов
+function Library:GiveSignal(signal)
+    if signal and type(signal.Disconnect) == "function" then
+        table.insert(self.Signals, signal)
+    end
+end
 
 -- Возвращаем библиотеку
 getgenv().AllureLibrary = Library
