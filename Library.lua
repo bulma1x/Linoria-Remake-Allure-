@@ -52,7 +52,18 @@ local Library = {
     Signals = {},          -- Подключения
     ScreenGui = ScreenGui, -- Основной GUI
     CurrentRainbowHue = 0,
-    CurrentRainbowColor = Color3.fromHSV(0, 0.8, 1)
+    CurrentRainbowColor = Color3.fromHSV(0, 0.8, 1),
+    
+    -- Водяной знак
+    Watermark = {
+        Visible = false,
+        Instance = nil,
+        Text = "Allure UI",
+        Position = UDim2.new(0.5, 0, 0, 10),
+        Color = Color3.fromRGB(255, 255, 255),
+        BackgroundColor = Color3.fromRGB(28, 28, 28),
+        OutlineColor = Color3.fromRGB(50, 50, 50)
+    }
 }
 
 -- Утилиты для работы с цветом
@@ -80,6 +91,88 @@ table.insert(Library.Signals, RenderStepped:Connect(function(deltaTime)
         Library.CurrentRainbowColor = Color3.fromHSV(Hue, 0.8, 1)
     end
 end))
+
+-- Водяной знак методы
+function Library:CreateWatermark()
+    if self.Watermark.Instance and self.Watermark.Instance.Parent then
+        return self.Watermark.Instance
+    end
+    
+    local watermark = Instance.new("Frame")
+    watermark.Name = "Watermark"
+    watermark.BackgroundColor3 = self.Watermark.BackgroundColor
+    watermark.BorderSizePixel = 0
+    watermark.Size = UDim2.new(0, 200, 0, 30)
+    watermark.Position = self.Watermark.Position
+    watermark.AnchorPoint = Vector2.new(0.5, 0)
+    watermark.Visible = self.Watermark.Visible
+    watermark.ZIndex = 999
+    watermark.Parent = self.ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = watermark
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Watermark.OutlineColor
+    stroke.Thickness = 1
+    stroke.Parent = watermark
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, -10, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.Text = self.Watermark.Text
+    label.Font = self.Font
+    label.TextColor3 = self.Watermark.Color
+    label.TextSize = 14
+    label.TextStrokeTransparency = 0.5
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = watermark.ZIndex + 1
+    label.Parent = watermark
+    
+    self.Watermark.Instance = watermark
+    return watermark
+end
+
+function Library:SetWatermark(text)
+    if not text then return end
+    
+    self.Watermark.Text = text
+    
+    if self.Watermark.Instance then
+        local label = self.Watermark.Instance:FindFirstChild("Label")
+        if label then
+            label.Text = text
+            
+            -- Автоматический размер
+            local textWidth = self:GetTextBounds(text, self.Font, 14)
+            if textWidth > 0 then
+                self.Watermark.Instance.Size = UDim2.new(0, textWidth + 20, 0, 30)
+            end
+        end
+    end
+end
+
+function Library:SetWatermarkVisibility(visible)
+    if type(visible) ~= "boolean" then return end
+    
+    self.Watermark.Visible = visible
+    
+    -- Создаем водяной знак если он еще не существует
+    if visible and not self.Watermark.Instance then
+        self:CreateWatermark()
+    end
+    
+    if self.Watermark.Instance then
+        self.Watermark.Instance.Visible = visible
+    end
+end
+
+function Library:UpdateWatermark(text)
+    self:SetWatermark(text)
+end
 
 -- Вспомогательные функции
 function Library:Create(className, properties)
@@ -526,6 +619,13 @@ function Library:MouseIsOverOpenedFrame()
     return false
 end
 
+-- Вспомогательная функция для подключения сигналов
+function Library:GiveSignal(signal)
+    if signal and type(signal.Disconnect) == "function" then
+        table.insert(self.Signals, signal)
+    end
+end
+
 -- Очистка библиотеки
 function Library:Unload()
     -- Отключаем все сигналы
@@ -557,13 +657,6 @@ end
 function Library:OnUnload(callback)
     if type(callback) == "function" then
         self.OnUnload = callback
-    end
-end
-
--- Вспомогательная функция для подключения сигналов
-function Library:GiveSignal(signal)
-    if signal and type(signal.Disconnect) == "function" then
-        table.insert(self.Signals, signal)
     end
 end
 
