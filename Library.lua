@@ -78,10 +78,11 @@ Tab.GroupboxMethods.AddLabel = function(self, text, wrap)
         Wrap = wrap or false,
         Parent = self 
     }
-    table.insert(self.Options, label)
     
+    -- Определяем методы для label
     function label:SetText(newText)
         self.Text = newText
+        -- Здесь нужно будет обновить UI элемент, если он существует
     end
     
     function label:AddColorPicker(options)
@@ -103,6 +104,9 @@ Tab.GroupboxMethods.AddLabel = function(self, text, wrap)
         self.KeyPicker = keypicker
         return keypicker
     end
+    
+    -- Добавляем label в опции групбокса
+    table.insert(self.Options, label)
     
     return label
 end
@@ -160,6 +164,7 @@ Tab.GroupboxMethods.AddButton = function(self, options)
     
     table.insert(self.Options, button)
     
+    -- Определяем метод AddButton для самого button
     function button:AddButton(subOptions)
         subOptions = subOptions or {}
         local subButton = {
