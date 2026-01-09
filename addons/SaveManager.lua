@@ -1,5 +1,6 @@
 -- SaveManager.lua
 local httpService = game:GetService('HttpService')
+local RunService = game:GetService('RunService')
 
 local SaveManager = {}
 
@@ -21,8 +22,12 @@ do
                 }
             end,
             Load = function(idx, data)
-                if Toggles[idx] then
-                    Toggles[idx]:SetValue(data.value)
+                if Toggles and Toggles[idx] then
+                    if Toggles[idx].SetValue then
+                        Toggles[idx]:SetValue(data.value)
+                    elseif Toggles[idx].Value ~= nil then
+                        Toggles[idx].Value = data.value
+                    end
                     if data.risky ~= nil then
                         -- Можно сохранить состояние risky, если нужно
                     end
@@ -43,8 +48,12 @@ do
                 }
             end,
             Load = function(idx, data)
-                if Options[idx] then
-                    Options[idx]:SetValue(data.value)
+                if Options and Options[idx] then
+                    if Options[idx].SetValue then
+                        Options[idx]:SetValue(data.value)
+                    elseif Options[idx].Value ~= nil then
+                        Options[idx].Value = data.value
+                    end
                 end
             end,
         },
@@ -72,15 +81,19 @@ do
                 }
             end,
             Load = function(idx, data)
-                if Options[idx] then
-                    if data.multi then
-                        local multiValue = {}
-                        for _, item in ipairs(data.value) do
-                            multiValue[item] = true
+                if Options and Options[idx] then
+                    if Options[idx].SetValue then
+                        if data.multi then
+                            local multiValue = {}
+                            for _, item in ipairs(data.value) do
+                                multiValue[item] = true
+                            end
+                            Options[idx]:SetValue(multiValue)
+                        else
+                            Options[idx]:SetValue(data.value)
                         end
-                        Options[idx]:SetValue(multiValue)
-                    else
-                        Options[idx]:SetValue(data.value)
+                    elseif Options[idx].Value ~= nil then
+                        Options[idx].Value = data.value
                     end
                 end
             end,
@@ -88,23 +101,33 @@ do
         
         ColorPicker = {
             Save = function(idx, object)
+                local hexValue = "FFFFFF"
+                if object.Value and object.Value.ToHex then
+                    local success, result = pcall(function()
+                        return object.Value:ToHex()
+                    end)
+                    if success then
+                        hexValue = result
+                    end
+                end
+                
                 return {
                     type = 'ColorPicker',
                     idx = idx,
-                    value = object.Value:ToHex(),
-                    transparency = object.Transparency,
-                    hue = object.Hue,
-                    sat = object.Sat,
-                    vib = object.Vib
+                    value = hexValue,
+                    transparency = object.Transparency or 0
                 }
             end,
             Load = function(idx, data)
-                if Options[idx] then
+                if Options and Options[idx] then
                     local color = Color3.fromHex(data.value)
-                    if data.hue and data.sat and data.vib then
-                        Options[idx]:SetValue({data.hue, data.sat, data.vib}, data.transparency)
-                    else
-                        Options[idx]:SetValueRGB(color, data.transparency)
+                    if Options[idx].SetValueRGB then
+                        Options[idx]:SetValueRGB(color, data.transparency or 0)
+                    elseif Options[idx].SetValue then
+                        Options[idx]:SetValue(color)
+                    elseif Options[idx].Value ~= nil then
+                        Options[idx].Value = color
+                        Options[idx].Transparency = data.transparency or 0
                     end
                 end
             end,
@@ -115,14 +138,19 @@ do
                 return {
                     type = 'KeyPicker',
                     idx = idx,
-                    key = object.Value,
-                    mode = object.Mode,
+                    key = object.Value or "RightControl",
+                    mode = object.Mode or "Toggle",
                     syncToggle = object.SyncToggleState or false
                 }
             end,
             Load = function(idx, data)
-                if Options[idx] then
-                    Options[idx]:SetValue({data.key, data.mode})
+                if Options and Options[idx] then
+                    if Options[idx].SetValue then
+                        Options[idx]:SetValue({data.key, data.mode})
+                    elseif Options[idx].Value ~= nil then
+                        Options[idx].Value = data.key
+                        Options[idx].Mode = data.mode
+                    end
                 end
             end,
         },
@@ -132,13 +160,17 @@ do
                 return {
                     type = 'Input',
                     idx = idx,
-                    value = object.Value,
+                    value = object.Value or "",
                     numeric = object.Numeric or false
                 }
             end,
             Load = function(idx, data)
-                if Options[idx] then
-                    Options[idx]:SetValue(data.value)
+                if Options and Options[idx] then
+                    if Options[idx].SetValue then
+                        Options[idx]:SetValue(data.value)
+                    elseif Options[idx].Value ~= nil then
+                        Options[idx].Value = data.value
+                    end
                 end
             end,
         },
@@ -146,6 +178,7 @@ do
     
     -- Игнорирование определенных индексов
     function SaveManager:SetIgnoreIndexes(list)
+        self.Ignore = {}
         for _, key in ipairs(list) do
             self.Ignore[key] = true
         end
@@ -162,7 +195,7 @@ do
         if not configName then return false end
         
         local configPath = self.Folder .. '/settings/' .. configName .. '.json'
-        if not isfile(configPath) then return false end
+        if not isfile or not isfile(configPath) then return false end
         
         local backupPath = self.Folder .. '/backups/' .. configName .. '_' .. os.time() .. '.json'
         
@@ -177,16 +210,22 @@ do
     
     -- Очистка старых резервных копий
     function SaveManager:CleanupBackups(configName)
+        if not listfiles then return end
+        
         local backups = self:GetBackupList(configName)
         
         while #backups > self.MaxBackups do
             local oldest = table.remove(backups, 1)
-            delfile(self.Folder .. '/backups/' .. oldest)
+            if delfile then
+                delfile(self.Folder .. '/backups/' .. oldest)
+            end
         end
     end
     
     -- Получение списка резервных копий
     function SaveManager:GetBackupList(configName)
+        if not listfiles then return {} end
+        
         local list = listfiles(self.Folder .. '/backups')
         local backups = {}
         
@@ -200,27 +239,15 @@ do
         return backups
     end
     
-    -- Восстановление из резервной копии
-    function SaveManager:RestoreFromBackup(backupName)
-        local backupPath = self.Folder .. '/backups/' .. backupName
-        if not isfile(backupPath) then return false end
-        
-        local content = readfile(backupPath)
-        local configName = backupName:match('(.+)_%d+%.json$')
-        
-        if configName then
-            local configPath = self.Folder .. '/settings/' .. configName .. '.json'
-            writefile(configPath, content)
-            return true
-        end
-        
-        return false
-    end
-    
     -- Сохранение конфигурации
     function SaveManager:Save(configName, createBackup)
         if not configName or configName:gsub(' ', '') == '' then
             return false, 'Имя конфигурации не может быть пустым'
+        end
+        
+        -- Проверяем доступность файловых функций
+        if not writefile or not isfile then
+            return false, 'Файловые функции не доступны'
         end
         
         local fullPath = self.Folder .. '/settings/' .. configName .. '.json'
@@ -236,21 +263,39 @@ do
                 created = os.time(),
                 version = '1.0',
                 game = game.PlaceId,
-                script = script and script.Name or 'Unknown'
+                script = 'Allure UI'
             }
         }
         
         -- Сохраняем тогглы
-        for idx, toggle in pairs(Toggles) do
-            if self.Ignore[idx] then continue end
-            table.insert(data.objects, self.Parser[toggle.Type].Save(idx, toggle))
+        if Toggles then
+            for idx, toggle in pairs(Toggles) do
+                if self.Ignore[idx] then continue end
+                if toggle.Type and self.Parser[toggle.Type] then
+                    local success, result = pcall(function()
+                        return self.Parser[toggle.Type].Save(idx, toggle)
+                    end)
+                    if success then
+                        table.insert(data.objects, result)
+                    end
+                end
+            end
         end
         
         -- Сохраняем опции
-        for idx, option in pairs(Options) do
-            if not self.Parser[option.Type] then continue end
-            if self.Ignore[idx] then continue end
-            table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
+        if Options then
+            for idx, option in pairs(Options) do
+                if not option.Type then continue end
+                if not self.Parser[option.Type] then continue end
+                if self.Ignore[idx] then continue end
+                
+                local success, result = pcall(function()
+                    return self.Parser[option.Type].Save(idx, option)
+                end)
+                if success then
+                    table.insert(data.objects, result)
+                end
+            end
         end
         
         local success, encoded = pcall(httpService.JSONEncode, httpService, data)
@@ -266,6 +311,10 @@ do
     function SaveManager:Load(configName)
         if not configName then
             return false, 'Не выбрана конфигурация'
+        end
+        
+        if not isfile then
+            return false, 'Файловые функции не доступны'
         end
         
         local filePath = self.Folder .. '/settings/' .. configName .. '.json'
@@ -284,9 +333,6 @@ do
             return false, 'Неверный формат конфигурации'
         end
         
-        -- Создаем резервную копию текущих настроек
-        self:CreateBackup('current_before_load')
-        
         -- Загружаем настройки
         for _, optionData in ipairs(decoded.objects) do
             if self.Parser[optionData.type] then
@@ -294,11 +340,6 @@ do
                     self.Parser[optionData.type].Load(optionData.idx, optionData)
                 end)
             end
-        end
-        
-        -- Обновляем UI после загрузки
-        if self.Library then
-            self.Library:UpdateDependencyBoxes()
         end
         
         return true, 'Конфигурация загружена'
@@ -322,21 +363,20 @@ do
     -- Игнорирование настроек тем
     function SaveManager:IgnoreThemeSettings()
         self:SetIgnoreIndexes({
-            -- Настройки тем
             "BackgroundColor", "MainColor", "AccentColor", "OutlineColor", "FontColor",
             "ThemeManager_ThemeList", 'ThemeManager_CustomThemeList', 'ThemeManager_CustomThemeName',
-            
-            -- Настройки менеджера конфигураций
             'SaveManager_ConfigList', 'SaveManager_ConfigName',
             'SaveManager_BackupList', 'SaveManager_AutoSaveToggle',
-            
-            -- Клавиша меню
             'MenuKeybind'
         })
     end
     
     -- Создание структуры папок
     function SaveManager:BuildFolderTree()
+        if not makefolder or not isfolder then
+            return
+        end
+        
         local paths = {
             self.Folder,
             self.Folder .. '/themes',
@@ -355,6 +395,10 @@ do
     
     -- Обновление списка конфигураций
     function SaveManager:RefreshConfigList()
+        if not listfiles or not isfolder then
+            return {}
+        end
+        
         if not isfolder(self.Folder .. '/settings') then
             return {}
         end
@@ -382,6 +426,8 @@ do
     
     -- Автозагрузка конфигурации
     function SaveManager:LoadAutoloadConfig()
+        if not isfile then return end
+        
         local autoloadPath = self.Folder .. '/settings/autoload.txt'
         
         if isfile(autoloadPath) then
@@ -390,56 +436,41 @@ do
             if configName and configName ~= '' then
                 local success, message = self:Load(configName)
                 
-                if success then
-                    if self.Library then
-                        self.Library:Notify(string.format('Autoload: %s', configName))
-                    end
-                else
+                if success and self.Library and self.Library.Notify then
+                    self.Library:Notify(string.format('Autoload: %s', configName))
+                elseif not success then
                     warn('Error autoload:', message)
                 end
             end
         end
     end
     
-    -- Экспорт конфигурации
-    function SaveManager:ExportConfig(configName)
-        if not configName then return false end
-        
-        local configPath = self.Folder .. '/settings/' .. configName .. '.json'
-        if not isfile(configPath) then return false end
-        
-        local content = readfile(configPath)
-        local exportPath = self.Folder .. '/exports/' .. configName .. '_export.json'
-        
-        writefile(exportPath, content)
-        return true
-    end
-    
-    -- Импорт конфигурации
-    function SaveManager:ImportConfig(filePath)
-        if not isfile(filePath) then return false end
-        
-        local content = readfile(filePath)
-        local success, decoded = pcall(httpService.JSONDecode, httpService, content)
-        
-        if not success then return false end
-        
-        -- Извлекаем имя конфигурации
-        local configName = filePath:match("([^/\\]+)%.json$")
-        if not configName then return false end
-        
-        -- Сохраняем в папке настроек
-        local savePath = self.Folder .. '/settings/' .. configName .. '.json'
-        writefile(savePath, content)
-        
-        return true, configName
+    -- Безопасный метод для установки события изменения
+    local function SafeOnChanged(toggle, callback)
+        if toggle and toggle.OnChanged and type(toggle.OnChanged) == "function" then
+            toggle:OnChanged(callback)
+        elseif toggle and toggle.Callback then
+            local originalCallback = toggle.Callback
+            toggle.Callback = function(value)
+                if originalCallback then
+                    originalCallback(value)
+                end
+                callback(value)
+            end
+        elseif toggle then
+            -- Если ничего не работает, просто сохраняем callback
+            toggle._onChangedCallback = callback
+        end
     end
     
     -- Создание раздела управления конфигурациями
     function SaveManager:BuildConfigSection(tab)
-        assert(self.Library, 'Сначала установите SaveManager.Library!')
+        if not self.Library then
+            warn('SaveManager: Сначала установите SaveManager.Library!')
+            return
+        end
         
-        local section = tab:AddRightGroupbox('⚙️ Управление конфигурациями')
+        local section = tab:AddLeftGroupbox('⚙️ Управление конфигурациями')
         section:AddLabel('Save and load settings', true)
         section:AddDivider()
         
@@ -464,18 +495,28 @@ do
         local manageButtons = section:AddButton({
             Text = 'Save',
             Func = function()
-                local configName = Options.SaveManager_ConfigName.Value
+                local configName = Options and Options.SaveManager_ConfigName and Options.SaveManager_ConfigName.Value or ""
                 if configName and configName ~= '' then
                     local success, message = self:Save(configName, true)
                     if success then
-                        self.Library:Notify('Config saved: ' .. configName)
-                        configList:SetValues(self:RefreshConfigList())
-                        Options.SaveManager_ConfigName:SetValue('')
+                        if self.Library and self.Library.Notify then
+                            self.Library:Notify('Config saved: ' .. configName)
+                        end
+                        if configList and configList.SetValues then
+                            configList:SetValues(self:RefreshConfigList())
+                        end
+                        if Options and Options.SaveManager_ConfigName and Options.SaveManager_ConfigName.SetValue then
+                            Options.SaveManager_ConfigName:SetValue('')
+                        end
                     else
-                        self.Library:Notify('Error: ' .. message, 3)
+                        if self.Library and self.Library.Notify then
+                            self.Library:Notify('Error: ' .. message, 3)
+                        end
                     end
                 else
-                    self.Library:Notify('Write name config!', 2)
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Write name config!', 2)
+                    end
                 end
             end,
             Tooltip = 'Сохранить текущие настройки'
@@ -484,12 +525,16 @@ do
         manageButtons:AddButton({
             Text = 'Load',
             Func = function()
-                if Options.SaveManager_ConfigList.Value then
+                if Options and Options.SaveManager_ConfigList and Options.SaveManager_ConfigList.Value then
                     local success, message = self:Load(Options.SaveManager_ConfigList.Value)
                     if success then
-                        self.Library:Notify('Config loaded')
+                        if self.Library and self.Library.Notify then
+                            self.Library:Notify('Config loaded')
+                        end
                     else
-                        self.Library:Notify('Error: ' .. message, 3)
+                        if self.Library and self.Library.Notify then
+                            self.Library:Notify('Error: ' .. message, 3)
+                        end
                     end
                 end
             end,
@@ -499,13 +544,21 @@ do
         manageButtons:AddButton({
             Text = 'Delete',
             Func = function()
-                if Options.SaveManager_ConfigList.Value then
+                if Options and Options.SaveManager_ConfigList and Options.SaveManager_ConfigList.Value then
                     local configPath = self.Folder .. '/settings/' .. Options.SaveManager_ConfigList.Value .. '.json'
-                    if isfile(configPath) then
-                        delfile(configPath)
-                        self.Library:Notify('Config deleted')
-                        configList:SetValues(self:RefreshConfigList())
-                        configList:SetValue(nil)
+                    if isfile and isfile(configPath) then
+                        if delfile then
+                            delfile(configPath)
+                        end
+                        if self.Library and self.Library.Notify then
+                            self.Library:Notify('Config deleted')
+                        end
+                        if configList and configList.SetValues then
+                            configList:SetValues(self:RefreshConfigList())
+                        end
+                        if configList and configList.SetValue then
+                            configList:SetValue(nil)
+                        end
                     end
                 end
             end,
@@ -518,25 +571,14 @@ do
         section:AddButton({
             Text = 'Update lists',
             Func = function()
-                configList:SetValues(self:RefreshConfigList())
-                self.Library:Notify('List updated')
-            end,
-            Tooltip = 'Update lists config'
-        })
-        
-        section:AddButton({
-            Text = 'Export',
-            Func = function()
-                if Options.SaveManager_ConfigList.Value then
-                    local success = self:ExportConfig(Options.SaveManager_ConfigList.Value)
-                    if success then
-                        self.Library:Notify('Config exported')
-                    else
-                        self.Library:Notify('Error export!', 2)
-                    end
+                if configList and configList.SetValues then
+                    configList:SetValues(self:RefreshConfigList())
+                end
+                if self.Library and self.Library.Notify then
+                    self.Library:Notify('List updated')
                 end
             end,
-            Tooltip = 'Exporting config'
+            Tooltip = 'Update lists config'
         })
         
         section:AddDivider()
@@ -547,11 +589,13 @@ do
         section:AddButton({
             Text = 'Install autoload',
             Func = function()
-                if Options.SaveManager_ConfigList.Value then
+                if Options and Options.SaveManager_ConfigList and Options.SaveManager_ConfigList.Value and writefile then
                     local autoloadPath = self.Folder .. '/settings/autoload.txt'
                     writefile(autoloadPath, Options.SaveManager_ConfigList.Value)
                     autoloadLabel:SetText('Autoload: ' .. Options.SaveManager_ConfigList.Value)
-                    self.Library:Notify('Autoload installed')
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Autoload installed')
+                    end
                 end
             end,
             Tooltip = 'Установить автозагрузку выбранной конфигурации'
@@ -561,10 +605,12 @@ do
             Text = 'Off autoload',
             Func = function()
                 local autoloadPath = self.Folder .. '/settings/autoload.txt'
-                if isfile(autoloadPath) then
+                if isfile and isfile(autoloadPath) and delfile then
                     delfile(autoloadPath)
                     autoloadLabel:SetText('Автозагрузка: отключена')
-                    self.Library:Notify('Автозагрузка отключена')
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Автозагрузка отключена')
+                    end
                 end
             end,
             Tooltip = 'Отключить автозагрузку'
@@ -572,30 +618,10 @@ do
         
         -- Загрузка текущей автозагрузки
         local autoloadPath = self.Folder .. '/settings/autoload.txt'
-        if isfile(autoloadPath) then
+        if isfile and isfile(autoloadPath) then
             local configName = readfile(autoloadPath)
             autoloadLabel:SetText('Автозагрузка: ' .. configName)
         end
-        
-        section:AddDivider()
-        
-        -- Резервные копии
-        section:AddLabel('Резервные копии', true)
-        
-        section:AddButton({
-            Text = '💾 Создать резервную копию',
-            Func = function()
-                if Options.SaveManager_ConfigList.Value then
-                    local success = self:CreateBackup(Options.SaveManager_ConfigList.Value)
-                    if success then
-                        self.Library:Notify('Резервная копия создана')
-                    else
-                        self.Library:Notify('Ошибка создания резервной копии', 2)
-                    end
-                end
-            end,
-            Tooltip = 'Создать резервную копию конфигурации'
-        })
         
         section:AddDivider()
         
@@ -606,34 +632,62 @@ do
             Tooltip = 'Автоматически сохранять настройки каждые 5 минут'
         })
         
-        local autoSaveInterval
-        Toggles.SaveManager_AutoSaveToggle:OnChanged(function(state)
-            if autoSaveInterval then
-                autoSaveInterval:Disconnect()
-                autoSaveInterval = nil
+        -- Безопасная настройка автосохранения
+        if autoSaveToggle then
+            local autoSaveInterval
+            
+            local function handleAutoSave(state)
+                if autoSaveInterval then
+                    autoSaveInterval:Disconnect()
+                    autoSaveInterval = nil
+                end
+                
+                if state then
+                    autoSaveInterval = RunService.Heartbeat:Connect(function()
+                        -- Проверяем каждые 5 минут (300 секунд)
+                        if tick() % 300 < 0.1 then -- Небольшая погрешность
+                            self:AutoSave()
+                        end
+                    end)
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Автосохранение включено')
+                    end
+                else
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Автосохранение отключено')
+                    end
+                end
             end
             
-            if state then
-                autoSaveInterval = RunService.Heartbeat:Connect(function()
-                    -- Проверяем каждые 5 минут (300 секунд)
-                    if tick() % 300 < 0.1 then -- Небольшая погрешность
-                        self:AutoSave()
+            -- Безопасное подключение события
+            SafeOnChanged(autoSaveToggle, handleAutoSave)
+            
+            -- Также настраиваем callback напрямую
+            if autoSaveToggle.Callback then
+                local originalCallback = autoSaveToggle.Callback
+                autoSaveToggle.Callback = function(value)
+                    if originalCallback then
+                        originalCallback(value)
                     end
-                end)
-                self.Library:Notify('Автосохранение включено')
+                    handleAutoSave(value)
+                end
             else
-                self.Library:Notify('Автосохранение отключено')
+                autoSaveToggle.Callback = handleAutoSave
             end
-        end)
+        end
         
         section:AddButton({
             Text = '🔁 Загрузить автосохранение',
             Func = function()
                 local success, message = self:LoadAutoSave()
                 if success then
-                    self.Library:Notify('Автосохранение загружено')
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Автосохранение загружено')
+                    end
                 else
-                    self.Library:Notify('Автосохранение не найдено', 2)
+                    if self.Library and self.Library.Notify then
+                        self.Library:Notify('Автосохранение не найдено', 2)
+                    end
                 end
             end,
             Tooltip = 'Загрузить последнее автосохранение'
