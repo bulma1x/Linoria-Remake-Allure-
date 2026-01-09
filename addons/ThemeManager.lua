@@ -197,51 +197,39 @@ do
             return
         end
         
-        -- Раздел основных цветов
-        local bgLabel = groupbox:AddLabel('Цвет фона')
-        local bgColorPicker
-        if bgLabel and bgLabel.AddColorPicker then
-            bgColorPicker = bgLabel:AddColorPicker('BackgroundColor', { 
-                Default = self.Library and self.Library.BackgroundColor or Color3.fromRGB(20, 20, 20),
-                Title = 'Цвет фона'
-            })
-        end
+        -- Используем AddLabel для заголовков без вызова AddColorPicker
+        groupbox:AddLabel('Основные цвета')
+        groupbox:AddDivider()
         
-        local mainLabel = groupbox:AddLabel('Основной цвет')
-        local mainColorPicker
-        if mainLabel and mainLabel.AddColorPicker then
-            mainColorPicker = mainLabel:AddColorPicker('MainColor', { 
-                Default = self.Library and self.Library.MainColor or Color3.fromRGB(28, 28, 28),
-                Title = 'Основной цвет'
-            })
-        end
+        -- Цвет фона
+        local bgColorPicker = groupbox:AddColorPicker('BackgroundColor', { 
+            Default = self.Library and self.Library.BackgroundColor or Color3.fromRGB(20, 20, 20),
+            Title = 'Цвет фона'
+        })
         
-        local accentLabel = groupbox:AddLabel('Акцентный цвет')
-        local accentColorPicker
-        if accentLabel and accentLabel.AddColorPicker then
-            accentColorPicker = accentLabel:AddColorPicker('AccentColor', { 
-                Default = self.Library and self.Library.AccentColor or Color3.fromRGB(0, 85, 255),
-                Title = 'Акцентный цвет'
-            })
-        end
+        -- Основной цвет
+        local mainColorPicker = groupbox:AddColorPicker('MainColor', { 
+            Default = self.Library and self.Library.MainColor or Color3.fromRGB(28, 28, 28),
+            Title = 'Основной цвет'
+        })
         
-        local outlineLabel = groupbox:AddLabel('Цвет обводки')
-        local outlineColorPicker
-        if outlineLabel and outlineLabel.AddColorPicker then
-            outlineColorPicker = outlineLabel:AddColorPicker('OutlineColor', { 
-                Default = self.Library and self.Library.OutlineColor or Color3.fromRGB(50, 50, 50),
-                Title = 'Цвет обводки'
-            })
-        end
+        -- Акцентный цвет
+        local accentColorPicker = groupbox:AddColorPicker('AccentColor', { 
+            Default = self.Library and self.Library.AccentColor or Color3.fromRGB(0, 85, 255),
+            Title = 'Акцентный цвет'
+        })
         
-        local fontLabel = groupbox:AddLabel('Цвет текста')
-        local fontColorPicker
-        if fontLabel and fontLabel.AddColorPicker then
-            fontColorPicker = fontLabel:AddColorPicker('FontColor', { 
-                Default = self.Library and self.Library.FontColor or Color3.fromRGB(255, 255, 255),
-                Title = 'Цвет текста'
-            })
-        end
+        -- Цвет обводки
+        local outlineColorPicker = groupbox:AddColorPicker('OutlineColor', { 
+            Default = self.Library and self.Library.OutlineColor or Color3.fromRGB(50, 50, 50),
+            Title = 'Цвет обводки'
+        })
+        
+        -- Цвет текста
+        local fontColorPicker = groupbox:AddColorPicker('FontColor', { 
+            Default = self.Library and self.Library.FontColor or Color3.fromRGB(255, 255, 255),
+            Title = 'Цвет текста'
+        })
 
         groupbox:AddDivider()
         
