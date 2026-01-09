@@ -51,7 +51,9 @@ do
                 if originalCallback then
                     originalCallback(value)
                 end
-                callback(value)
+                if callback then
+                    callback(value)
+                end
             end
             return true
         elseif option then
@@ -86,13 +88,21 @@ do
                     self.Library[colorName] = colorValue
                 end
                 
-                if Options and Options[colorName] then
-                    if Options[colorName].SetValue then
-                        Options[colorName]:SetValue(colorValue)
-                    elseif Options[colorName].SetValueRGB then
-                        Options[colorName]:SetValueRGB(colorValue)
-                    elseif Options[colorName].Value ~= nil then
-                        Options[colorName].Value = colorValue
+                -- Безопасный доступ к Options
+                if type(getgenv()) == "table" and getgenv().Options then
+                    local Options = getgenv().Options
+                    if Options[colorName] then
+                        if Options[colorName].SetValue then
+                            pcall(function()
+                                Options[colorName]:SetValue(colorValue)
+                            end)
+                        elseif Options[colorName].SetValueRGB then
+                            pcall(function()
+                                Options[colorName]:SetValueRGB(colorValue)
+                            end)
+                        elseif Options[colorName].Value ~= nil then
+                            Options[colorName].Value = colorValue
+                        end
                     end
                 end
             end
@@ -111,8 +121,12 @@ do
         local colorFields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
         
         for _, field in ipairs(colorFields) do
-            if Options and Options[field] and Options[field].Value then
-                self.Library[field] = Options[field].Value
+            -- Безопасный доступ к Options через getgenv()
+            if type(getgenv()) == "table" and getgenv().Options then
+                local Options = getgenv().Options
+                if Options[field] and Options[field].Value then
+                    self.Library[field] = Options[field].Value
+                end
             end
         end
 
@@ -123,7 +137,9 @@ do
         
         -- Обновляем цвета через реестр если есть такой метод
         if self.Library.UpdateColorsUsingRegistry then
-            self.Library:UpdateColorsUsingRegistry()
+            pcall(function()
+                self.Library:UpdateColorsUsingRegistry()
+            end)
         end
     end
 
@@ -131,27 +147,44 @@ do
     function ThemeManager:LoadDefault()
         local theme = 'Default'
         
-        if isfile and isfile(self.Folder .. '/themes/default.txt') then
-            local content = readfile(self.Folder .. '/themes/default.txt')
-            
-            if self.BuiltInThemes[content] then
-                theme = content
-            elseif self:GetCustomTheme(content) then
-                theme = content
+        if writefile and readfile and isfile then
+            local defaultPath = self.Folder .. '/themes/default.txt'
+            if isfile(defaultPath) then
+                local success, content = pcall(function()
+                    return readfile(defaultPath)
+                end)
+                
+                if success and content then
+                    if self.BuiltInThemes[content] then
+                        theme = content
+                    elseif self:GetCustomTheme(content) then
+                        theme = content
+                    end
+                end
             end
         end
 
-        if Options and Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.SetValue then
-            Options.ThemeManager_ThemeList:SetValue(theme)
+        -- Безопасный доступ к Options
+        if type(getgenv()) == "table" and getgenv().Options then
+            local Options = getgenv().Options
+            if Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.SetValue then
+                pcall(function()
+                    Options.ThemeManager_ThemeList:SetValue(theme)
+                end)
+            end
         end
+        
         self:ApplyTheme(theme)
     end
 
     -- Сохранение темы по умолчанию
     function ThemeManager:SaveDefault(themeName)
         if writefile then
-            writefile(self.Folder .. '/themes/default.txt', themeName)
-            if self.Library and self.Library.Notify then
+            local success = pcall(function()
+                writefile(self.Folder .. '/themes/default.txt', themeName)
+            end)
+            
+            if success and self.Library and self.Library.Notify then
                 self.Library:Notify(string.format('Тема "%s" установлена по умолчанию', themeName))
             end
         end
@@ -159,36 +192,56 @@ do
 
     -- Создание менеджера тем
     function ThemeManager:CreateThemeManager(groupbox)
+        if not groupbox then
+            warn("ThemeManager: Groupbox is nil!")
+            return
+        end
+        
         -- Раздел основных цветов
         local bgLabel = groupbox:AddLabel('Цвет фона')
-        local bgColorPicker = bgLabel:AddColorPicker('BackgroundColor', { 
-            Default = self.Library and self.Library.BackgroundColor or Color3.fromRGB(20, 20, 20),
-            Title = 'Цвет фона'
-        })
+        local bgColorPicker
+        if bgLabel and bgLabel.AddColorPicker then
+            bgColorPicker = bgLabel:AddColorPicker('BackgroundColor', { 
+                Default = self.Library and self.Library.BackgroundColor or Color3.fromRGB(20, 20, 20),
+                Title = 'Цвет фона'
+            })
+        end
         
         local mainLabel = groupbox:AddLabel('Основной цвет')
-        local mainColorPicker = mainLabel:AddColorPicker('MainColor', { 
-            Default = self.Library and self.Library.MainColor or Color3.fromRGB(28, 28, 28),
-            Title = 'Основной цвет'
-        })
+        local mainColorPicker
+        if mainLabel and mainLabel.AddColorPicker then
+            mainColorPicker = mainLabel:AddColorPicker('MainColor', { 
+                Default = self.Library and self.Library.MainColor or Color3.fromRGB(28, 28, 28),
+                Title = 'Основной цвет'
+            })
+        end
         
         local accentLabel = groupbox:AddLabel('Акцентный цвет')
-        local accentColorPicker = accentLabel:AddColorPicker('AccentColor', { 
-            Default = self.Library and self.Library.AccentColor or Color3.fromRGB(0, 85, 255),
-            Title = 'Акцентный цвет'
-        })
+        local accentColorPicker
+        if accentLabel and accentLabel.AddColorPicker then
+            accentColorPicker = accentLabel:AddColorPicker('AccentColor', { 
+                Default = self.Library and self.Library.AccentColor or Color3.fromRGB(0, 85, 255),
+                Title = 'Акцентный цвет'
+            })
+        end
         
         local outlineLabel = groupbox:AddLabel('Цвет обводки')
-        local outlineColorPicker = outlineLabel:AddColorPicker('OutlineColor', { 
-            Default = self.Library and self.Library.OutlineColor or Color3.fromRGB(50, 50, 50),
-            Title = 'Цвет обводки'
-        })
+        local outlineColorPicker
+        if outlineLabel and outlineLabel.AddColorPicker then
+            outlineColorPicker = outlineLabel:AddColorPicker('OutlineColor', { 
+                Default = self.Library and self.Library.OutlineColor or Color3.fromRGB(50, 50, 50),
+                Title = 'Цвет обводки'
+            })
+        end
         
         local fontLabel = groupbox:AddLabel('Цвет текста')
-        local fontColorPicker = fontLabel:AddColorPicker('FontColor', { 
-            Default = self.Library and self.Library.FontColor or Color3.fromRGB(255, 255, 255),
-            Title = 'Цвет текста'
-        })
+        local fontColorPicker
+        if fontLabel and fontLabel.AddColorPicker then
+            fontColorPicker = fontLabel:AddColorPicker('FontColor', { 
+                Default = self.Library and self.Library.FontColor or Color3.fromRGB(255, 255, 255),
+                Title = 'Цвет текста'
+            })
+        end
 
         groupbox:AddDivider()
         
@@ -210,14 +263,20 @@ do
         })
 
         groupbox:AddButton('Применить тему', function()
-            if Options and Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.Value then
-                self:ApplyTheme(Options.ThemeManager_ThemeList.Value)
+            if type(getgenv()) == "table" and getgenv().Options then
+                local Options = getgenv().Options
+                if Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.Value then
+                    self:ApplyTheme(Options.ThemeManager_ThemeList.Value)
+                end
             end
         })
 
         groupbox:AddButton('Установить как тему по умолчанию', function()
-            if Options and Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.Value then
-                self:SaveDefault(Options.ThemeManager_ThemeList.Value)
+            if type(getgenv()) == "table" and getgenv().Options then
+                local Options = getgenv().Options
+                if Options.ThemeManager_ThemeList and Options.ThemeManager_ThemeList.Value then
+                    self:SaveDefault(Options.ThemeManager_ThemeList.Value)
+                end
             end
         })
 
@@ -245,19 +304,22 @@ do
         local buttonRow = groupbox:AddButton({
             Text = 'Сохранить тему',
             Func = function()
-                if Options and Options.ThemeManager_CustomThemeName and Options.ThemeManager_CustomThemeName.Value then
-                    local themeName = Options.ThemeManager_CustomThemeName.Value
-                    if themeName and themeName ~= '' then
-                        self:SaveCustomTheme(themeName)
-                        if customThemeDropdown and customThemeDropdown.SetValues then
-                            customThemeDropdown:SetValues(self:ReloadCustomThemes())
-                        end
-                        if Options.ThemeManager_CustomThemeName and Options.ThemeManager_CustomThemeName.SetValue then
-                            Options.ThemeManager_CustomThemeName:SetValue('')
-                        end
-                    else
-                        if self.Library and self.Library.Notify then
-                            self.Library:Notify('Введите название темы!', 3)
+                if type(getgenv()) == "table" and getgenv().Options then
+                    local Options = getgenv().Options
+                    if Options.ThemeManager_CustomThemeName and Options.ThemeManager_CustomThemeName.Value then
+                        local themeName = Options.ThemeManager_CustomThemeName.Value
+                        if themeName and themeName ~= '' then
+                            self:SaveCustomTheme(themeName)
+                            if customThemeDropdown and customThemeDropdown.SetValues then
+                                customThemeDropdown:SetValues(self:ReloadCustomThemes())
+                            end
+                            if Options.ThemeManager_CustomThemeName and Options.ThemeManager_CustomThemeName.SetValue then
+                                Options.ThemeManager_CustomThemeName:SetValue('')
+                            end
+                        else
+                            if self.Library and self.Library.Notify then
+                                self.Library:Notify('Введите название темы!', 3)
+                            end
                         end
                     end
                 end
@@ -265,31 +327,39 @@ do
             Tooltip = 'Сохранить текущие цвета как пользовательскую тему'
         })
         
-        buttonRow:AddButton({
-            Text = 'Загрузить тему',
-            Func = function()
-                if Options and Options.ThemeManager_CustomThemeList and Options.ThemeManager_CustomThemeList.Value then
-                    self:ApplyTheme(Options.ThemeManager_CustomThemeList.Value)
-                end
-            end,
-            Tooltip = 'Загрузить выбранную пользовательскую тему'
-        })
-        
-        buttonRow:AddButton({
-            Text = 'Удалить тему',
-            Func = function()
-                if Options and Options.ThemeManager_CustomThemeList and Options.ThemeManager_CustomThemeList.Value then
-                    self:DeleteCustomTheme(Options.ThemeManager_CustomThemeList.Value)
-                    if customThemeDropdown and customThemeDropdown.SetValues then
-                        customThemeDropdown:SetValues(self:ReloadCustomThemes())
+        if buttonRow and buttonRow.AddButton then
+            buttonRow:AddButton({
+                Text = 'Загрузить тему',
+                Func = function()
+                    if type(getgenv()) == "table" and getgenv().Options then
+                        local Options = getgenv().Options
+                        if Options.ThemeManager_CustomThemeList and Options.ThemeManager_CustomThemeList.Value then
+                            self:ApplyTheme(Options.ThemeManager_CustomThemeList.Value)
+                        end
                     end
-                    if customThemeDropdown and customThemeDropdown.SetValue then
-                        customThemeDropdown:SetValue(nil)
+                end,
+                Tooltip = 'Загрузить выбранную пользовательскую тему'
+            })
+            
+            buttonRow:AddButton({
+                Text = 'Удалить тему',
+                Func = function()
+                    if type(getgenv()) == "table" and getgenv().Options then
+                        local Options = getgenv().Options
+                        if Options.ThemeManager_CustomThemeList and Options.ThemeManager_CustomThemeList.Value then
+                            self:DeleteCustomTheme(Options.ThemeManager_CustomThemeList.Value)
+                            if customThemeDropdown and customThemeDropdown.SetValues then
+                                customThemeDropdown:SetValues(self:ReloadCustomThemes())
+                            end
+                            if customThemeDropdown and customThemeDropdown.SetValue then
+                                customThemeDropdown:SetValue(nil)
+                            end
+                        end
                     end
-                end
-            end,
-            Tooltip = 'Удалить выбранную пользовательскую тему'
-        })
+                end,
+                Tooltip = 'Удалить выбранную пользовательскую тему'
+            })
+        end
 
         groupbox:AddDivider()
         
@@ -317,8 +387,9 @@ do
             self:ThemeUpdate()
         end
 
-        -- Безопасное подключение событий
-        if Options then
+        -- Безопасное подключение событий через getgenv()
+        if type(getgenv()) == "table" and getgenv().Options then
+            local Options = getgenv().Options
             SafeOnChanged(Options.BackgroundColor, UpdateTheme)
             SafeOnChanged(Options.MainColor, UpdateTheme)
             SafeOnChanged(Options.AccentColor, UpdateTheme)
@@ -332,18 +403,31 @@ do
 
     -- Получение кастомной темы
     function ThemeManager:GetCustomTheme(fileName)
-        if not isfile then return nil end
+        if not writefile or not readfile or not isfile then return nil end
         
         local path = self.Folder .. '/themes/' .. fileName .. '.json'
         
-        if not isfile(path) then
+        local exists = pcall(function()
+            return isfile(path)
+        end)
+        
+        if not exists then
             return nil
         end
 
-        local data = readfile(path)
-        local success, decoded = pcall(httpService.JSONDecode, httpService, data)
+        local success, data = pcall(function()
+            return readfile(path)
+        end)
         
-        if not success then
+        if not success or not data then
+            return nil
+        end
+
+        local decodeSuccess, decoded = pcall(function()
+            return httpService:JSONDecode(data)
+        end)
+        
+        if not decodeSuccess then
             if self.Library and self.Library.Notify then
                 self.Library:Notify('Ошибка загрузки темы: ' .. fileName, 3)
             end
@@ -356,7 +440,12 @@ do
         
         for _, field in ipairs(colorFields) do
             if decoded[field] then
-                theme[field] = Color3.fromHex(decoded[field])
+                local colorSuccess, color = pcall(function()
+                    return Color3.fromHex(decoded[field])
+                end)
+                if colorSuccess then
+                    theme[field] = color
+                end
             end
         end
 
@@ -372,34 +461,59 @@ do
             return
         end
 
-        if not Options or not writefile then return end
+        if not writefile then return end
 
         local theme = {}
         local fields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
-
-        for _, field in ipairs(fields) do
-            if Options[field] and Options[field].Value and Options[field].Value.ToHex then
-                theme[field] = Options[field].Value:ToHex()
+        
+        -- Безопасный доступ к Options
+        if type(getgenv()) == "table" and getgenv().Options then
+            local Options = getgenv().Options
+            
+            for _, field in ipairs(fields) do
+                if Options[field] and Options[field].Value then
+                    local colorSuccess, hex = pcall(function()
+                        return Options[field].Value:ToHex()
+                    end)
+                    if colorSuccess then
+                        theme[field] = hex
+                    end
+                end
             end
         end
 
         local filePath = self.Folder .. '/themes/' .. fileName .. '.json'
-        writefile(filePath, httpService:JSONEncode(theme))
+        local encodeSuccess, json = pcall(function()
+            return httpService:JSONEncode(theme)
+        end)
         
-        if self.Library and self.Library.Notify then
-            self.Library:Notify(string.format('Тема "%s" сохранена', fileName))
+        if encodeSuccess and json then
+            local writeSuccess = pcall(function()
+                writefile(filePath, json)
+            end)
+            
+            if writeSuccess and self.Library and self.Library.Notify then
+                self.Library:Notify(string.format('Тема "%s" сохранена', fileName))
+            end
         end
     end
 
     -- Удаление кастомной темы
     function ThemeManager:DeleteCustomTheme(fileName)
-        if not isfile or not delfile then return end
+        if not writefile or not readfile or not delfile or not isfile then return end
         
         local path = self.Folder .. '/themes/' .. fileName .. '.json'
         
-        if isfile(path) then
-            delfile(path)
-            if self.Library and self.Library.Notify then
+        local exists = pcall(function()
+            return isfile(path)
+        end)
+        
+        if exists then
+            local deleteSuccess = pcall(function()
+                delfile(path)
+            end)
+            
+            if deleteSuccess and self.Library and self.Library.Notify then
                 self.Library:Notify(string.format('Тема "%s" удалена', fileName))
             end
         end
@@ -407,17 +521,28 @@ do
 
     -- Обновление списка кастомных тем
     function ThemeManager:ReloadCustomThemes()
-        if not isfolder then return {} end
+        if not writefile or not readfile or not isfolder or not listfiles then return {} end
         
-        if not isfolder(self.Folder .. '/themes') then
+        local folderExists = pcall(function()
+            return isfolder(self.Folder .. '/themes')
+        end)
+        
+        if not folderExists then
             return {}
         end
 
-        local themesList = listfiles(self.Folder .. '/themes')
+        local listSuccess, themesList = pcall(function()
+            return listfiles(self.Folder .. '/themes')
+        end)
+        
+        if not listSuccess then
+            return {}
+        end
+
         local customThemes = {}
 
         for _, filePath in ipairs(themesList) do
-            if filePath:sub(-5) == '.json' then
+            if type(filePath) == "string" and filePath:sub(-5) == '.json' then
                 local fileName = filePath:match("([^/\\]+)%.json$")
                 if fileName then
                     table.insert(customThemes, fileName)
@@ -444,8 +569,17 @@ do
         }
 
         for _, folder in ipairs(folders) do
-            if not isfolder(folder) then
-                makefolder(folder)
+            local exists = pcall(function()
+                return isfolder(folder)
+            end)
+            
+            if not exists then
+                local success = pcall(function()
+                    makefolder(folder)
+                end)
+                if not success then
+                    warn("Не удалось создать папку: " .. folder)
+                end
             end
         end
     end
@@ -462,7 +596,15 @@ do
             return
         end
         
-        local groupbox = tab:AddLeftGroupbox('🎨 Настройки тем')
+        local success, groupbox = pcall(function()
+            return tab:AddLeftGroupbox('🎨 Настройки тем')
+        end)
+        
+        if not success or not groupbox then
+            warn('ThemeManager: Не удалось создать groupbox!')
+            return
+        end
+        
         groupbox:AddLabel('Настройте внешний вид интерфейса', true)
         groupbox:AddDivider()
         
