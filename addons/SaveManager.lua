@@ -446,21 +446,28 @@ do
     end
     
     -- Безопасный метод для установки события изменения
-    local function SafeOnChanged(toggle, callback)
-        if toggle and toggle.OnChanged and type(toggle.OnChanged) == "function" then
-            toggle:OnChanged(callback)
-        elseif toggle and toggle.Callback then
-            local originalCallback = toggle.Callback
-            toggle.Callback = function(value)
+    local function SafeOnChanged(option, callback)
+        if not option or not callback then return false end
+        
+        -- Проверяем разные варианты
+        if option.OnChanged and type(option.OnChanged) == "function" then
+            option:OnChanged(callback)
+            return true
+        elseif option.OnChange and type(option.OnChange) == "function" then
+            option:OnChange(callback)
+            return true
+        elseif option.Callback and type(option.Callback) == "function" then
+            local originalCallback = option.Callback
+            option.Callback = function(value)
                 if originalCallback then
                     originalCallback(value)
                 end
                 callback(value)
             end
-        elseif toggle then
-            -- Если ничего не работает, просто сохраняем callback
-            toggle._onChangedCallback = callback
+            return true
         end
+        
+        return false
     end
     
     -- Создание раздела управления конфигурациями
