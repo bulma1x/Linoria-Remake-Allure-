@@ -491,24 +491,168 @@ function Library:Create(className, properties)
     return instance
 end
 
-function Library:SetWatermarkVisibility(visible)
-    self.Watermark.Visible = visible
-    if visible and not self.Watermark.Instance then
-        self:CreateWatermark()
+function Library:CreateWatermark()
+    if self.Watermark.Instance and self.Watermark.Instance.Parent then
+        return self.Watermark.Instance
     end
+    
+    -- Создаем фрейм водяного знака
+    local watermark = Instance.new("Frame")
+    watermark.Name = "Watermark"
+    watermark.BackgroundColor3 = self.Colors.Main
+    watermark.BorderSizePixel = 0
+    watermark.Size = UDim2.new(0, 200, 0, 30)
+    watermark.Position = self.Watermark.Position
+    watermark.AnchorPoint = Vector2.new(0.5, 0)
+    watermark.Visible = self.Watermark.Visible
+    watermark.ZIndex = 999
+    watermark.Parent = self.ScreenGui
+    
+    -- Скругленные углы
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = watermark
+    
+    -- Обводка
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Colors.Outline
+    stroke.Thickness = 1
+    stroke.Parent = watermark
+    
+    -- Текст
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, -10, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.Text = self.Watermark.Text
+    label.Font = self.Font
+    label.TextColor3 = self.Colors.Font
+    label.TextSize = 14
+    label.TextStrokeTransparency = 0.5
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = watermark.ZIndex + 1
+    label.Parent = watermark
+    
+    -- Регистрируем цвета
+    self:AddToRegistry(watermark, {
+        BackgroundColor3 = "Colors.Main",
+        BorderColor3 = "Colors.Outline"
+    })
+    
+    self:AddToRegistry(label, {
+        TextColor3 = "Colors.Font"
+    })
+    
+    self.Watermark.Instance = watermark
+    return watermark
+end
+
+-- Метод для обновления текста водяного знака
+function Library:UpdateWatermark(text)
+    if not text then return end
+    
+    self.Watermark.Text = text
+    
+    if self.Watermark.Instance then
+        local label = self.Watermark.Instance:FindFirstChild("Label")
+        if label then
+            label.Text = text
+            
+            -- Автоматически подгоняем размер
+            local textWidth = self:GetTextBounds(text, self.Font, 14)
+            if textWidth > 0 then
+                self.Watermark.Instance.Size = UDim2.new(0, textWidth + 20, 0, 30)
+            end
+        end
+    end
+end
+
+-- Исправленный метод SetWatermarkVisibility
+function Library:SetWatermarkVisibility(visible)
+    if type(visible) ~= "boolean" then return end
+    
+    self.Watermark.Visible = visible
+    
+    -- Создаем водяной знак если он еще не существует
+    if visible then
+        if not self.Watermark.Instance then
+            self:CreateWatermark()
+        end
+    end
+    
     if self.Watermark.Instance then
         self.Watermark.Instance.Visible = visible
     end
 end
 
+-- Исправленный метод SetWatermark
 function Library:SetWatermark(text)
+    if not text then return end
+    
     self.Watermark.Text = text
+    
+    -- Создаем водяной знак если нужно
+    if self.Watermark.Visible and not self.Watermark.Instance then
+        self:CreateWatermark()
+    end
+    
     if self.Watermark.Instance then
         local label = self.Watermark.Instance:FindFirstChild("Label")
         if label then
             label.Text = text
+            
+            -- Автоматически подгоняем размер
+            local textWidth, _ = self:GetTextBounds(text, self.Font, 14)
+            if textWidth > 0 then
+                self.Watermark.Instance.Size = UDim2.new(0, textWidth + 20, 0, 30)
+            end
         end
     end
+end
+
+-- Также нужно добавить метод GetTextBounds если его нет:
+function Library:GetTextBounds(text, font, size, resolution)
+    if not text or not font or not size then
+        return 0, 0
+    end
+    
+    local success, bounds = pcall(function()
+        return TextService:GetTextSize(
+            tostring(text), 
+            tonumber(size) or 14, 
+            font, 
+            resolution or Vector2.new(1920, 1080)
+        )
+    end)
+    
+    if success and bounds then
+        return bounds.X, bounds.Y
+    else
+        -- Fallback
+        return #text * (size / 2), size
+    end
+end
+
+-- И метод AddToRegistry если его нет:
+function Library:AddToRegistry(instance, properties, isHud)
+    if not instance then return end
+    
+    local index = #self.Registry + 1
+    local data = {
+        Instance = instance,
+        Properties = properties or {},
+        Index = index
+    }
+    
+    table.insert(self.Registry, data)
+    self.RegistryMap[instance] = data
+    
+    if isHud then
+        table.insert(self.HudRegistry, data)
+    end
+    
+    return data
 end
 
 function Library:Notify(message, duration)
