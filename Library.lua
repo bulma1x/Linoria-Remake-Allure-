@@ -1082,19 +1082,26 @@ function Library:SetWatermarkVisibility(visible)
 end
 
 function Library:SetWatermark(text)
+    if not text then return end
+    
     self.Watermark.Text = text
+    
     if self.Watermark.Visible and not self.Watermark.Instance then
         self:CreateWatermark()
     end
-    if self.Watermark.Instance then
-        local label = self.Watermark.Instance:FindFirstChild("Label")
-        if label then
-            label.Text = text
-            local textWidth = self:GetTextBounds(text, self.Font, 14)
-            if textWidth > 0 then
-                self.Watermark.Instance.Size = UDim2.new(0, textWidth + 20, 0, 30)
-            end
-        end
+    
+    if not self.Watermark.Instance then return end
+    
+    local label = self.Watermark.Instance:FindFirstChild("Label")
+    if not label then return end
+    
+    label.Text = text
+    
+    local textSize = self:GetTextBounds(text, self.Font, 14)
+    local width = textSize.X
+    
+    if width > 0 then
+        self.Watermark.Instance.Size = UDim2.new(0, width + 20, 0, 30)
     end
 end
 
