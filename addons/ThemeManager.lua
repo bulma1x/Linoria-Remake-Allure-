@@ -257,7 +257,7 @@ do
                     self:ApplyTheme(Options.ThemeManager_ThemeList.Value)
                 end
             end
-        })
+        )
 
         groupbox:AddButton('Установить как тему по умолчанию', function()
             if type(getgenv()) == "table" and getgenv().Options then
@@ -266,7 +266,7 @@ do
                     self:SaveDefault(Options.ThemeManager_ThemeList.Value)
                 end
             end
-        })
+        )
 
         groupbox:AddDivider()
         
@@ -624,3 +624,4 @@ do
 end
 
 return ThemeManager
+
