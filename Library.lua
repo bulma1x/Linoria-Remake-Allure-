@@ -1083,26 +1083,30 @@ end
 
 function Library:SetWatermark(text)
     if not text then return end
-    
+
     self.Watermark.Text = text
-    
+
+    -- Создаём, если нужно и включено
     if self.Watermark.Visible and not self.Watermark.Instance then
         self:CreateWatermark()
     end
-    
+
+    -- Если инстанса всё ещё нет — выходим
     if not self.Watermark.Instance then return end
-    
+
     local label = self.Watermark.Instance:FindFirstChild("Label")
     if not label then return end
-    
+
     label.Text = text
-    
-    local textSize = self:GetTextBounds(text, self.Font, 14)
-    local width = textSize.X
-    
-    if width > 0 then
-        self.Watermark.Instance.Size = UDim2.new(0, width + 20, 0, 30)
-    end
+
+    -- Вот здесь главное исправление:
+    local textSize = self:GetTextBounds(text, self.Font, 14) or Vector2.new(100, 20)
+    local width = textSize.X   -- ← берём .X !
+
+    -- Минимальная ширина, чтобы не сжимался до нуля
+    width = math.max(width, 80)
+
+    self.Watermark.Instance.Size = UDim2.new(0, width + 24, 0, 30)
 end
 
 function Library:GetTextBounds(text, font, size, resolution)
