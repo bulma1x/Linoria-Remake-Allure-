@@ -257,6 +257,7 @@ do
                     self:ApplyTheme(Options.ThemeManager_ThemeList.Value)
                 end
             end
+        end
         )
 
         groupbox:AddButton('Установить как тему по умолчанию', function()
@@ -266,6 +267,7 @@ do
                     self:SaveDefault(Options.ThemeManager_ThemeList.Value)
                 end
             end
+        end
         )
 
         groupbox:AddDivider()
@@ -624,4 +626,5 @@ do
 end
 
 return ThemeManager
+
 
