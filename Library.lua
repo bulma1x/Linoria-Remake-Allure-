@@ -52,24 +52,31 @@ local Hue = 0
 
 -- ANIMATION HELPERS
 function Library:ApplyCorner(Instance, Radius)
+    if not Instance or not Instance:IsA('GuiObject') then
+        return nil
+    end
+    
     Radius = Radius or Library.CornerRadius
-    -- Проверяем существование и создаём только если его нет
+    
     local Corner = Instance:FindFirstChild('UICorner')
     if not Corner then
-        -- Используем pcall для безопасности
         local success, result = pcall(function()
             local newCorner = Instance.new('UICorner')
             newCorner.Parent = Instance
             return newCorner
         end)
-        if success and result then
-            Corner = result
-        else
-            -- Если не удалось создать, просто возвращаем nil
+        if not success then
             return nil
         end
+        Corner = result
     end
-    Corner.CornerRadius = UDim.new(0, Radius)
+    
+    if Corner then
+        pcall(function()
+            Corner.CornerRadius = UDim.new(0, Radius)
+        end)
+    end
+    
     return Corner
 end
 
