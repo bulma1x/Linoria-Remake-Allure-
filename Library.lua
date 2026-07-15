@@ -45,6 +45,12 @@ local Library = {
     AnimationSpeed = 0.3;
     CornerRadius = 4;
     BorderGlow = true;
+    
+    -- Настройки переливающейся границы
+    GlowColor1 = Color3.fromRGB(0, 0, 0);  -- Чёрный
+    GlowColor2 = Color3.fromRGB(0, 85, 255); -- Синий
+    GlowSpeed = 1.5; -- Скорость переливания
+    GlowThickness = 2; -- Толщина границы
 };
 
 local RainbowStep = 0
@@ -74,43 +80,79 @@ function Library:ApplyCorner(Instance, Radius)
     return nil
 end
 
-function Library:ApplyGlowBorder(Instance, Thickness, Color)
+-- Функция для переливающейся границы с настраиваемыми цветами
+function Library:ApplyGlowBorder(Instance, Thickness, Color1, Color2, Speed)
     if not Instance then return nil end
     
+    Thickness = Thickness or Library.GlowThickness or 2
+    Color1 = Color1 or Library.GlowColor1 or Color3.new(0, 0, 0)
+    Color2 = Color2 or Library.GlowColor2 or Color3.fromRGB(0, 85, 255)
+    Speed = Speed or Library.GlowSpeed or 1.5
+    
     local success, result = pcall(function()
-        Thickness = Thickness or 2
         local Stroke = Instance:FindFirstChild('UIStroke')
         if not Stroke then
             Stroke = Instance.new('UIStroke')
             Stroke.Parent = Instance
         end
         Stroke.Thickness = Thickness
-        Stroke.Color = Color or Library.AccentColor
         Stroke.Transparency = 0.3
+        
+        local StrokeRef = Stroke
         
         local GlowThread
         local function StartGlow()
             if GlowThread then return end
             GlowThread = task.spawn(function()
-                local HueOffset = 0
-                while Instance and Instance.Parent do
-                    HueOffset = (HueOffset + 0.005) % 1
-                    local GlowColor = Color3.fromHSV(HueOffset, 0.8, 1)
-                    Stroke.Color = GlowColor
-                    Stroke.Transparency = 0.2 + math.sin(HueOffset * 20) * 0.15
+                local Time = 0
+                while Instance and Instance.Parent and StrokeRef and StrokeRef.Parent do
+                    Time = Time + 0.02
+                    local SinVal = (math.sin(Time * Speed) + 1) / 2
+                    
+                    -- Смешиваем два цвета
+                    local Color = Color3.new(
+                        Color1.R + (Color2.R - Color1.R) * SinVal,
+                        Color1.G + (Color2.G - Color1.G) * SinVal,
+                        Color1.B + (Color2.B - Color1.B) * SinVal
+                    )
+                    
+                    pcall(function()
+                        StrokeRef.Color = Color
+                        StrokeRef.Transparency = 0.2 + SinVal * 0.3
+                    end)
                     task.wait(0.05)
                 end
             end)
         end
         
         StartGlow()
-        return Stroke
+        return StrokeRef
     end)
     
     if success then
         return result
     end
     return nil
+end
+
+-- Функция для обновления цветов границы у всех элементов
+function Library:UpdateGlowColors(Color1, Color2, Speed)
+    if Color1 then Library.GlowColor1 = Color1 end
+    if Color2 then Library.GlowColor2 = Color2 end
+    if Speed then Library.GlowSpeed = Speed end
+    
+    -- Перезапускаем анимацию для всех элементов с границей
+    -- Просто пересоздаём границы
+    for _, instance in next, Library.Registry do
+        local obj = instance.Instance
+        if obj and obj:FindFirstChild('UIStroke') then
+            local stroke = obj:FindFirstChild('UIStroke')
+            -- Обновляем цвета через пересоздание
+            local parent = stroke.Parent
+            stroke:Destroy()
+            Library:ApplyGlowBorder(parent, Library.GlowThickness, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed)
+        end
+    end
 end
 
 table.insert(Library.Signals, RenderStepped:Connect(function(Delta)
@@ -226,6 +268,7 @@ function Library:AddToolTip(InfoStr, HoverInstance)
         Visible = false;
     })
     pcall(function() Library:ApplyCorner(Tooltip, 4) end)
+    pcall(function() Library:ApplyGlowBorder(Tooltip, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
     local Label = Library:CreateLabel({
         Position = UDim2.fromOffset(3, 1);
@@ -448,6 +491,7 @@ do
             Parent = ScreenGui;
         });
         pcall(function() Library:ApplyCorner(PickerFrameOuter, 6) end)
+        pcall(function() Library:ApplyGlowBorder(PickerFrameOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         DisplayFrame:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
             PickerFrameOuter.Position = UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18);
@@ -666,6 +710,7 @@ do
                 Parent = ContextMenu.Container;
             });
             pcall(function() Library:ApplyCorner(ContextMenu.Inner, 4) end);
+            pcall(function() Library:ApplyGlowBorder(ContextMenu.Inner, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end);
 
             Library:Create('UIListLayout', {
                 Name = 'Layout';
@@ -1025,6 +1070,7 @@ do
             Parent = ModeSelectOuter;
         });
         pcall(function() Library:ApplyCorner(ModeSelectInner, 4) end)
+        pcall(function() Library:ApplyGlowBorder(ModeSelectInner, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(ModeSelectInner, {
             BackgroundColor3 = 'BackgroundColor';
@@ -1346,6 +1392,7 @@ do
             });
             pcall(function() Library:ApplyCorner(Inner, 3) end)
             pcall(function() Library:ApplyCorner(Outer, 4) end)
+            pcall(function() Library:ApplyGlowBorder(Outer, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
             local Label = Library:CreateLabel({
                 Size = UDim2.new(1, 0, 1, 0);
@@ -1538,6 +1585,7 @@ do
         });
         pcall(function() Library:ApplyCorner(TextBoxInner, 3) end)
         pcall(function() Library:ApplyCorner(TextBoxOuter, 4) end)
+        pcall(function() Library:ApplyGlowBorder(TextBoxOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(TextBoxInner, {
             BackgroundColor3 = 'MainColor';
@@ -1691,6 +1739,7 @@ do
         });
         pcall(function() Library:ApplyCorner(ToggleInner, 3) end)
         pcall(function() Library:ApplyCorner(ToggleOuter, 4) end)
+        pcall(function() Library:ApplyGlowBorder(ToggleOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(ToggleInner, {
             BackgroundColor3 = 'MainColor';
@@ -1840,6 +1889,7 @@ do
         });
         pcall(function() Library:ApplyCorner(SliderInner, 3) end)
         pcall(function() Library:ApplyCorner(SliderOuter, 4) end)
+        pcall(function() Library:ApplyGlowBorder(SliderOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(SliderInner, {
             BackgroundColor3 = 'MainColor';
@@ -2025,6 +2075,7 @@ do
         });
         pcall(function() Library:ApplyCorner(DropdownInner, 3) end)
         pcall(function() Library:ApplyCorner(DropdownOuter, 4) end)
+        pcall(function() Library:ApplyGlowBorder(DropdownOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(DropdownInner, {
             BackgroundColor3 = 'MainColor';
@@ -2080,6 +2131,7 @@ do
             Parent = ScreenGui;
         });
         pcall(function() Library:ApplyCorner(ListOuter, 4) end)
+        pcall(function() Library:ApplyGlowBorder(ListOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         local function RecalculateListPosition()
             ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1);
@@ -2588,9 +2640,18 @@ do
     end;
 
     function Library:SetWatermark(Text)
-        local X, Y = Library:GetTextBounds(Text, Library.Font, 14);
-        Library.Watermark.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3);
-        Library.WatermarkText.Text = Text
+        -- Вычисляем размер текста
+        local X, Y = Library:GetTextBounds(Text, Library.Font, 14)
+        
+        -- Обновляем размер водяного знака с отступами
+        local Padding = 20
+        local NewWidth = X + Padding + 10
+        local NewHeight = Y * 1.8 + 6
+        
+        -- Применяем новый размер
+        WatermarkOuter.Size = UDim2.new(0, NewWidth, 0, NewHeight)
+        WatermarkLabel.Size = UDim2.new(1, -10, 1, 0)
+        WatermarkLabel.Text = Text
         
         -- Если есть .kxn! - запускаем анимацию
         if string.find(Text, "%.kxn!") then
@@ -2612,6 +2673,7 @@ do
         Parent = ScreenGui;
     });
     pcall(function() Library:ApplyCorner(KeybindOuter, 4) end)
+    pcall(function() Library:ApplyGlowBorder(KeybindOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
     local KeybindInner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2686,6 +2748,7 @@ function Library:Notify(Text, Time)
         Parent = Library.NotificationArea;
     });
     pcall(function() Library:ApplyCorner(NotifyOuter, 4) end)
+    pcall(function() Library:ApplyGlowBorder(NotifyOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
     local NotifyInner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2839,6 +2902,7 @@ function Library:CreateWindow(...)
         Parent = Inner;
     });
     pcall(function() Library:ApplyCorner(MainSectionOuter, 4) end)
+    pcall(function() Library:ApplyGlowBorder(MainSectionOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
     Library:AddToRegistry(MainSectionOuter, {
         BackgroundColor3 = 'BackgroundColor';
@@ -2884,6 +2948,7 @@ function Library:CreateWindow(...)
         Parent = MainSectionInner;
     });
     pcall(function() Library:ApplyCorner(TabContainer, 4) end)
+    pcall(function() Library:ApplyGlowBorder(TabContainer, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
     Library:AddToRegistry(TabContainer, {
         BackgroundColor3 = 'MainColor';
@@ -2910,6 +2975,7 @@ function Library:CreateWindow(...)
             Parent = TabArea;
         });
         pcall(function() Library:ApplyCorner(TabButton, 4) end)
+        pcall(function() Library:ApplyGlowBorder(TabButton, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
         Library:AddToRegistry(TabButton, {
             BackgroundColor3 = 'BackgroundColor';
@@ -3030,6 +3096,7 @@ function Library:CreateWindow(...)
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
             pcall(function() Library:ApplyCorner(BoxOuter, 4) end)
+            pcall(function() Library:ApplyGlowBorder(BoxOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3127,6 +3194,7 @@ function Library:CreateWindow(...)
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
             pcall(function() Library:ApplyCorner(BoxOuter, 4) end)
+            pcall(function() Library:ApplyGlowBorder(BoxOuter, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3186,6 +3254,7 @@ function Library:CreateWindow(...)
                     Parent = TabboxButtons;
                 });
                 pcall(function() Library:ApplyCorner(Button, 3) end)
+                pcall(function() Library:ApplyGlowBorder(Button, 1, Library.GlowColor1, Library.GlowColor2, Library.GlowSpeed) end)
 
                 Library:AddToRegistry(Button, {
                     BackgroundColor3 = 'MainColor';
