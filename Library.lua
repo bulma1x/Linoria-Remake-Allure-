@@ -50,7 +50,7 @@ local Library = {
 local RainbowStep = 0
 local Hue = 0
 
--- ANIMATION HELPERS
+-- ANIMATION HELPERS with pcall protection
 function Library:ApplyCorner(Instance, Radius)
     if not Instance or not Instance:IsA('GuiObject') then
         return nil
@@ -58,56 +58,59 @@ function Library:ApplyCorner(Instance, Radius)
     
     Radius = Radius or Library.CornerRadius
     
-    local Corner = Instance:FindFirstChild('UICorner')
-    if not Corner then
-        local success, result = pcall(function()
-            local newCorner = Instance.new('UICorner')
-            newCorner.Parent = Instance
-            return newCorner
-        end)
-        if not success then
-            return nil
+    local success, result = pcall(function()
+        local Corner = Instance:FindFirstChild('UICorner')
+        if not Corner then
+            Corner = Instance.new('UICorner')
+            Corner.Parent = Instance
         end
-        Corner = result
-    end
+        Corner.CornerRadius = UDim.new(0, Radius)
+        return Corner
+    end)
     
-    if Corner then
-        pcall(function()
-            Corner.CornerRadius = UDim.new(0, Radius)
-        end)
+    if success then
+        return result
     end
-    
-    return Corner
+    return nil
 end
 
 function Library:ApplyGlowBorder(Instance, Thickness, Color)
-    Thickness = Thickness or 2
-    local Stroke = Instance:FindFirstChild('UIStroke')
-    if not Stroke then
-        Stroke = Instance.new('UIStroke')
-        Stroke.Parent = Instance
-    end
-    Stroke.Thickness = Thickness
-    Stroke.Color = Color or Library.AccentColor
-    Stroke.Transparency = 0.3
+    if not Instance then return nil end
     
-    local GlowThread
-    local function StartGlow()
-        if GlowThread then return end
-        GlowThread = task.spawn(function()
-            local HueOffset = 0
-            while Instance and Instance.Parent do
-                HueOffset = (HueOffset + 0.005) % 1
-                local GlowColor = Color3.fromHSV(HueOffset, 0.8, 1)
-                Stroke.Color = GlowColor
-                Stroke.Transparency = 0.2 + math.sin(HueOffset * 20) * 0.15
-                task.wait(0.05)
-            end
-        end)
-    end
+    local success, result = pcall(function()
+        Thickness = Thickness or 2
+        local Stroke = Instance:FindFirstChild('UIStroke')
+        if not Stroke then
+            Stroke = Instance.new('UIStroke')
+            Stroke.Parent = Instance
+        end
+        Stroke.Thickness = Thickness
+        Stroke.Color = Color or Library.AccentColor
+        Stroke.Transparency = 0.3
+        
+        local GlowThread
+        local function StartGlow()
+            if GlowThread then return end
+            GlowThread = task.spawn(function()
+                local HueOffset = 0
+                while Instance and Instance.Parent do
+                    HueOffset = (HueOffset + 0.005) % 1
+                    local GlowColor = Color3.fromHSV(HueOffset, 0.8, 1)
+                    Stroke.Color = GlowColor
+                    Stroke.Transparency = 0.2 + math.sin(HueOffset * 20) * 0.15
+                    task.wait(0.05)
+                end
+            end)
+        end
+        
+        StartGlow()
+        return Stroke
+    end)
     
-    StartGlow()
-    return Stroke
+    if success then
+        return result
+    end
+    return nil
 end
 
 table.insert(Library.Signals, RenderStepped:Connect(function(Delta)
@@ -164,13 +167,15 @@ function Library:Create(Class, Properties)
 end;
 
 function Library:ApplyTextStroke(Inst)
-    Inst.TextStrokeTransparency = 1;
-    Library:Create('UIStroke', {
-        Color = Color3.new(0, 0, 0);
-        Thickness = 1;
-        LineJoinMode = Enum.LineJoinMode.Miter;
-        Parent = Inst;
-    });
+    pcall(function()
+        Inst.TextStrokeTransparency = 1;
+        Library:Create('UIStroke', {
+            Color = Color3.new(0, 0, 0);
+            Thickness = 1;
+            LineJoinMode = Enum.LineJoinMode.Miter;
+            Parent = Inst;
+        });
+    end)
 end;
 
 function Library:CreateLabel(Properties, IsHud)
@@ -220,7 +225,7 @@ function Library:AddToolTip(InfoStr, HoverInstance)
         Parent = Library.ScreenGui;
         Visible = false;
     })
-    Library:ApplyCorner(Tooltip, 4)
+    pcall(function() Library:ApplyCorner(Tooltip, 4) end)
 
     local Label = Library:CreateLabel({
         Position = UDim2.fromOffset(3, 1);
@@ -421,7 +426,7 @@ do
             ZIndex = 6;
             Parent = ToggleLabel;
         });
-        Library:ApplyCorner(DisplayFrame, 3)
+        pcall(function() Library:ApplyCorner(DisplayFrame, 3) end)
 
         local CheckerFrame = Library:Create('ImageLabel', {
             BorderSizePixel = 0;
@@ -442,7 +447,7 @@ do
             ZIndex = 15;
             Parent = ScreenGui;
         });
-        Library:ApplyCorner(PickerFrameOuter, 6)
+        pcall(function() Library:ApplyCorner(PickerFrameOuter, 6) end)
 
         DisplayFrame:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
             PickerFrameOuter.Position = UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18);
@@ -456,7 +461,7 @@ do
             ZIndex = 16;
             Parent = PickerFrameOuter;
         });
-        Library:ApplyCorner(PickerFrameInner, 6)
+        pcall(function() Library:ApplyCorner(PickerFrameInner, 6) end)
 
         local Highlight = Library:Create('Frame', {
             BackgroundColor3 = Library.AccentColor;
@@ -660,7 +665,7 @@ do
                 ZIndex = 15;
                 Parent = ContextMenu.Container;
             });
-            Library:ApplyCorner(ContextMenu.Inner, 4);
+            pcall(function() Library:ApplyCorner(ContextMenu.Inner, 4) end);
 
             Library:Create('UIListLayout', {
                 Name = 'Layout';
@@ -982,7 +987,7 @@ do
             ZIndex = 7;
             Parent = PickOuter;
         });
-        Library:ApplyCorner(PickInner, 3)
+        pcall(function() Library:ApplyCorner(PickInner, 3) end)
 
         Library:AddToRegistry(PickInner, {
             BackgroundColor3 = 'BackgroundColor';
@@ -1019,7 +1024,7 @@ do
             ZIndex = 15;
             Parent = ModeSelectOuter;
         });
-        Library:ApplyCorner(ModeSelectInner, 4)
+        pcall(function() Library:ApplyCorner(ModeSelectInner, 4) end)
 
         Library:AddToRegistry(ModeSelectInner, {
             BackgroundColor3 = 'BackgroundColor';
@@ -1339,8 +1344,8 @@ do
                 ZIndex = 6;
                 Parent = Outer;
             });
-            Library:ApplyCorner(Inner, 3)
-            Library:ApplyCorner(Outer, 4)
+            pcall(function() Library:ApplyCorner(Inner, 3) end)
+            pcall(function() Library:ApplyCorner(Outer, 4) end)
 
             local Label = Library:CreateLabel({
                 Size = UDim2.new(1, 0, 1, 0);
@@ -1531,8 +1536,8 @@ do
             ZIndex = 6;
             Parent = TextBoxOuter;
         });
-        Library:ApplyCorner(TextBoxInner, 3)
-        Library:ApplyCorner(TextBoxOuter, 4)
+        pcall(function() Library:ApplyCorner(TextBoxInner, 3) end)
+        pcall(function() Library:ApplyCorner(TextBoxOuter, 4) end)
 
         Library:AddToRegistry(TextBoxInner, {
             BackgroundColor3 = 'MainColor';
@@ -1684,8 +1689,8 @@ do
             ZIndex = 6;
             Parent = ToggleOuter;
         });
-        Library:ApplyCorner(ToggleInner, 3)
-        Library:ApplyCorner(ToggleOuter, 4)
+        pcall(function() Library:ApplyCorner(ToggleInner, 3) end)
+        pcall(function() Library:ApplyCorner(ToggleOuter, 4) end)
 
         Library:AddToRegistry(ToggleInner, {
             BackgroundColor3 = 'MainColor';
@@ -1833,8 +1838,8 @@ do
             ZIndex = 6;
             Parent = SliderOuter;
         });
-        Library:ApplyCorner(SliderInner, 3)
-        Library:ApplyCorner(SliderOuter, 4)
+        pcall(function() Library:ApplyCorner(SliderInner, 3) end)
+        pcall(function() Library:ApplyCorner(SliderOuter, 4) end)
 
         Library:AddToRegistry(SliderInner, {
             BackgroundColor3 = 'MainColor';
@@ -1848,7 +1853,7 @@ do
             ZIndex = 7;
             Parent = SliderInner;
         });
-        Library:ApplyCorner(Fill, 3)
+        pcall(function() Library:ApplyCorner(Fill, 3) end)
 
         Library:AddToRegistry(Fill, {
             BackgroundColor3 = 'AccentColor';
@@ -2018,8 +2023,8 @@ do
             ZIndex = 6;
             Parent = DropdownOuter;
         });
-        Library:ApplyCorner(DropdownInner, 3)
-        Library:ApplyCorner(DropdownOuter, 4)
+        pcall(function() Library:ApplyCorner(DropdownInner, 3) end)
+        pcall(function() Library:ApplyCorner(DropdownOuter, 4) end)
 
         Library:AddToRegistry(DropdownInner, {
             BackgroundColor3 = 'MainColor';
@@ -2074,7 +2079,7 @@ do
             Visible = false;
             Parent = ScreenGui;
         });
-        Library:ApplyCorner(ListOuter, 4)
+        pcall(function() Library:ApplyCorner(ListOuter, 4) end)
 
         local function RecalculateListPosition()
             ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1);
@@ -2097,7 +2102,7 @@ do
             ZIndex = 21;
             Parent = ListOuter;
         });
-        Library:ApplyCorner(ListInner, 4)
+        pcall(function() Library:ApplyCorner(ListInner, 4) end)
 
         Library:AddToRegistry(ListInner, {
             BackgroundColor3 = 'MainColor';
@@ -2458,8 +2463,8 @@ do
         Visible = false;
         Parent = ScreenGui;
     });
-    Library:ApplyCorner(WatermarkOuter, 6)
-    Library:ApplyGlowBorder(WatermarkOuter, 2)
+    pcall(function() Library:ApplyCorner(WatermarkOuter, 6) end)
+    pcall(function() Library:ApplyGlowBorder(WatermarkOuter, 2) end)
 
     local WatermarkInner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2469,7 +2474,7 @@ do
         ZIndex = 201;
         Parent = WatermarkOuter;
     });
-    Library:ApplyCorner(WatermarkInner, 6)
+    pcall(function() Library:ApplyCorner(WatermarkInner, 6) end)
     Library:AddToRegistry(WatermarkInner, {
         BorderColor3 = 'AccentColor';
     });
@@ -2482,7 +2487,7 @@ do
         ZIndex = 202;
         Parent = WatermarkInner;
     });
-    Library:ApplyCorner(InnerFrame, 5)
+    pcall(function() Library:ApplyCorner(InnerFrame, 5) end)
 
     local Gradient = Library:Create('UIGradient', {
         Color = ColorSequence.new({
@@ -2606,7 +2611,7 @@ do
         ZIndex = 100;
         Parent = ScreenGui;
     });
-    Library:ApplyCorner(KeybindOuter, 4)
+    pcall(function() Library:ApplyCorner(KeybindOuter, 4) end)
 
     local KeybindInner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2616,7 +2621,7 @@ do
         ZIndex = 101;
         Parent = KeybindOuter;
     });
-    Library:ApplyCorner(KeybindInner, 4)
+    pcall(function() Library:ApplyCorner(KeybindInner, 4) end)
 
     Library:AddToRegistry(KeybindInner, {
         BackgroundColor3 = 'MainColor';
@@ -2630,7 +2635,7 @@ do
         ZIndex = 102;
         Parent = KeybindInner;
     });
-    Library:ApplyCorner(ColorFrame, 2)
+    pcall(function() Library:ApplyCorner(ColorFrame, 2) end)
     Library:AddToRegistry(ColorFrame, {
         BackgroundColor3 = 'AccentColor';
     }, true);
@@ -2680,7 +2685,7 @@ function Library:Notify(Text, Time)
         ZIndex = 100;
         Parent = Library.NotificationArea;
     });
-    Library:ApplyCorner(NotifyOuter, 4)
+    pcall(function() Library:ApplyCorner(NotifyOuter, 4) end)
 
     local NotifyInner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2690,7 +2695,7 @@ function Library:Notify(Text, Time)
         ZIndex = 101;
         Parent = NotifyOuter;
     });
-    Library:ApplyCorner(NotifyInner, 4)
+    pcall(function() Library:ApplyCorner(NotifyInner, 4) end)
 
     Library:AddToRegistry(NotifyInner, {
         BackgroundColor3 = 'MainColor';
@@ -2742,7 +2747,7 @@ function Library:Notify(Text, Time)
         ZIndex = 104;
         Parent = NotifyOuter;
     });
-    Library:ApplyCorner(LeftColor, 2)
+    pcall(function() Library:ApplyCorner(LeftColor, 2) end)
     Library:AddToRegistry(LeftColor, {
         BackgroundColor3 = 'AccentColor';
     }, true);
@@ -2795,8 +2800,8 @@ function Library:CreateWindow(...)
         ZIndex = 1;
         Parent = ScreenGui;
     });
-    Library:ApplyCorner(Outer, 8)
-    Library:ApplyGlowBorder(Outer, 2)
+    pcall(function() Library:ApplyCorner(Outer, 8) end)
+    pcall(function() Library:ApplyGlowBorder(Outer, 2) end)
 
     Library:MakeDraggable(Outer, 25);
 
@@ -2809,7 +2814,7 @@ function Library:CreateWindow(...)
         ZIndex = 1;
         Parent = Outer;
     });
-    Library:ApplyCorner(Inner, 8)
+    pcall(function() Library:ApplyCorner(Inner, 8) end)
 
     Library:AddToRegistry(Inner, {
         BackgroundColor3 = 'MainColor';
@@ -2833,7 +2838,7 @@ function Library:CreateWindow(...)
         ZIndex = 1;
         Parent = Inner;
     });
-    Library:ApplyCorner(MainSectionOuter, 4)
+    pcall(function() Library:ApplyCorner(MainSectionOuter, 4) end)
 
     Library:AddToRegistry(MainSectionOuter, {
         BackgroundColor3 = 'BackgroundColor';
@@ -2849,7 +2854,7 @@ function Library:CreateWindow(...)
         ZIndex = 1;
         Parent = MainSectionOuter;
     });
-    Library:ApplyCorner(MainSectionInner, 4)
+    pcall(function() Library:ApplyCorner(MainSectionInner, 4) end)
 
     Library:AddToRegistry(MainSectionInner, {
         BackgroundColor3 = 'BackgroundColor';
@@ -2878,7 +2883,7 @@ function Library:CreateWindow(...)
         ZIndex = 2;
         Parent = MainSectionInner;
     });
-    Library:ApplyCorner(TabContainer, 4)
+    pcall(function() Library:ApplyCorner(TabContainer, 4) end)
 
     Library:AddToRegistry(TabContainer, {
         BackgroundColor3 = 'MainColor';
@@ -2904,7 +2909,7 @@ function Library:CreateWindow(...)
             ZIndex = 1;
             Parent = TabArea;
         });
-        Library:ApplyCorner(TabButton, 4)
+        pcall(function() Library:ApplyCorner(TabButton, 4) end)
 
         Library:AddToRegistry(TabButton, {
             BackgroundColor3 = 'BackgroundColor';
@@ -3024,7 +3029,7 @@ function Library:CreateWindow(...)
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
-            Library:ApplyCorner(BoxOuter, 4)
+            pcall(function() Library:ApplyCorner(BoxOuter, 4) end)
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3039,7 +3044,7 @@ function Library:CreateWindow(...)
                 ZIndex = 4;
                 Parent = BoxOuter;
             });
-            Library:ApplyCorner(BoxInner, 4)
+            pcall(function() Library:ApplyCorner(BoxInner, 4) end)
 
             Library:AddToRegistry(BoxInner, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3052,7 +3057,7 @@ function Library:CreateWindow(...)
                 ZIndex = 5;
                 Parent = BoxInner;
             });
-            Library:ApplyCorner(Highlight, 2)
+            pcall(function() Library:ApplyCorner(Highlight, 2) end)
 
             Library:AddToRegistry(Highlight, {
                 BackgroundColor3 = 'AccentColor';
@@ -3121,7 +3126,7 @@ function Library:CreateWindow(...)
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
-            Library:ApplyCorner(BoxOuter, 4)
+            pcall(function() Library:ApplyCorner(BoxOuter, 4) end)
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3136,7 +3141,7 @@ function Library:CreateWindow(...)
                 ZIndex = 4;
                 Parent = BoxOuter;
             });
-            Library:ApplyCorner(BoxInner, 4)
+            pcall(function() Library:ApplyCorner(BoxInner, 4) end)
 
             Library:AddToRegistry(BoxInner, {
                 BackgroundColor3 = 'BackgroundColor';
@@ -3149,7 +3154,7 @@ function Library:CreateWindow(...)
                 ZIndex = 10;
                 Parent = BoxInner;
             });
-            Library:ApplyCorner(Highlight, 2)
+            pcall(function() Library:ApplyCorner(Highlight, 2) end)
 
             Library:AddToRegistry(Highlight, {
                 BackgroundColor3 = 'AccentColor';
@@ -3180,7 +3185,7 @@ function Library:CreateWindow(...)
                     ZIndex = 6;
                     Parent = TabboxButtons;
                 });
-                Library:ApplyCorner(Button, 3)
+                pcall(function() Library:ApplyCorner(Button, 3) end)
 
                 Library:AddToRegistry(Button, {
                     BackgroundColor3 = 'MainColor';
