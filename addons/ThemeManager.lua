@@ -102,6 +102,18 @@ local ThemeManager = {} do
 		end)
 
 		groupbox:AddDivider()
+		groupbox:AddInput('ThemeManager_BgImageUrl', { Text = 'Background image URL' })
+		groupbox:AddButton('Set background', function()
+			local url = Options.ThemeManager_BgImageUrl.Value
+			if url:gsub(' ', '') == '' then
+				return self.Library:Notify('Введи URL картинки', 2)
+			end
+			self:SetBackgroundImage(url)
+		end):AddButton('Clear background', function()
+			self:ClearBackgroundImage()
+		end)
+
+		groupbox:AddDivider()
 		groupbox:AddInput('ThemeManager_CustomThemeName', { Text = 'Custom theme name' })
 		groupbox:AddDropdown('ThemeManager_CustomThemeList', { Text = 'Custom themes', Values = self:ReloadCustomThemes(), AllowNull = true, Default = 1 })
 		groupbox:AddDivider()
@@ -199,6 +211,66 @@ local ThemeManager = {} do
 
 	function ThemeManager:SetLibrary(lib)
 		self.Library = lib
+	end
+
+	-- Загружает картинку по URL и ставит фоном GUI
+	-- Если request() или getcustomasset недоступны — просто уведомляет, ничего не ломает
+	function ThemeManager:SetBackgroundImage(url)
+		local reqFunc = request or http_request or (syn and syn.request) or (fluxus and fluxus.request)
+		if not reqFunc then
+			return self.Library:Notify('HTTP request() недоступен на этом executor\'е', 3)
+		end
+
+		local Holder = self.Library and self.Library.ScreenGui
+		if not Holder then
+			return self.Library:Notify('Library не инициализирована', 3)
+		end
+
+		task.spawn(function()
+			local ok, res = pcall(reqFunc, { Url = url, Method = 'GET' })
+			if not ok or not res or res.StatusCode ~= 200 then
+				return self.Library:Notify('Не удалось загрузить картинку по URL', 3)
+			end
+
+			-- writefile + getcustomasset работает на Synapse X, Fluxus, KRNL и др.
+			local assetOk, assetId = pcall(function()
+				local tmpPath = self.Folder .. '/bg_cache.png'
+				writefile(tmpPath, res.Body)
+				return getcustomasset(tmpPath)
+			end)
+
+			if not assetOk then
+				return self.Library:Notify('getcustomasset недоступен на этом executor\'е', 3)
+			end
+
+			-- Убираем старый фон если уже стоит
+			local old = Holder:FindFirstChild('__ThemeBG')
+			if old then old:Destroy() end
+
+			-- ImageLabel с ZIndex 0 — под всем GUI
+			local bg = Instance.new('ImageLabel')
+			bg.Name                  = '__ThemeBG'
+			bg.Image                 = assetId
+			bg.Size                  = UDim2.fromScale(1, 1)
+			bg.Position              = UDim2.fromScale(0, 0)
+			bg.BackgroundTransparency = 1
+			bg.ScaleType             = Enum.ScaleType.Crop
+			bg.ZIndex                = 0
+			bg.Parent                = Holder
+
+			self.Library:Notify('Фон успешно установлен!', 3)
+		end)
+	end
+
+	-- Убирает фоновую картинку
+	function ThemeManager:ClearBackgroundImage()
+		local Holder = self.Library and self.Library.ScreenGui
+		if not Holder then return end
+		local old = Holder:FindFirstChild('__ThemeBG')
+		if old then
+			old:Destroy()
+			self.Library:Notify('Фон убран', 2)
+		end
 	end
 
 	function ThemeManager:BuildFolderTree()
